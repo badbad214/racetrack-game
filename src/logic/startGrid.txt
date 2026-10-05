@@ -1,0 +1,112 @@
+this is the file version before refactoring
+// === startGrid.ts ===
+// Extracts valid starting line positions for player placement
+
+import { Section } from "../types/types";
+import { getAllowedPlayerPositions } from "./PlayerPositionHelper";
+import { StartSpot } from "../types/types";
+
+// Base direction for 0° (going right)
+const baseDir = { dx: 1, dy: 0 };
+
+// Apply same rotation logic to direction vector
+function rotateDirection(dx: number, dy: number, rotation: number): { dx: number, dy: number } {
+    switch (rotation % 360) {
+        case 0: return { dx, dy };
+        case 90: return { dx: -dy, dy: dx };
+        case 180: return { dx: -dx, dy: -dy };
+        case 270: return { dx: dy, dy: -dx };
+        default: return { dx, dy };
+    }
+}
+
+function rotateRelativePosition(p: { x: number; y: number }, rotation: number): { x: number; y: number } {
+    const cx = 45;
+    const cy = 45;
+    const dx = p.x - cx;
+    const dy = p.y - cy;
+
+    switch (rotation % 360) {
+        case 0:
+            return { x: cx + dx, y: cy + dy };
+        case 90:
+            return { x: cx - dy, y: cy + dx };
+        case 180:
+            return { x: cx - dx, y: cy - dy };
+        case 270:
+            return { x: cx + dy, y: cy - dx };
+        default:
+            return { x: p.x, y: p.y };
+    }
+}
+
+// Assumes that getAllowedPlayerPositions() for "start" tiles already returns only starting line positions
+export function getStartGrid(sections: Section[]): StartSpot[] {
+    console.log("[DEBUG] getStartGrid called with sections:", sections);
+
+    const result: StartSpot[] = [];
+
+    const allowed = new Set<string>();
+    for (let gx = 0; gx <= 900; gx += 15) {
+        for (let gy = 0; gy <= 900; gy += 15) {
+            allowed.add(`${gx},${gy}`);
+        }
+    }
+
+    for (const section of sections) {
+        if (section.type !== "start") continue;
+
+        const { x, y, rotation } = section;
+        const tileSize = 90;
+
+        const positions = [
+            { x: 45, y: 15 },
+            { x: 45, y: 30 },
+            { x: 45, y: 45 },
+            { x: 45, y: 60 },
+            { x: 45, y: 75 },
+        ];
+
+        const dir = rotateDirection(1, 0, rotation);
+        const rotated = positions.map((p) => rotateRelativePosition(p, rotation));
+
+        for (const p of rotated) {
+            const worldX = x * tileSize + p.x;
+            const worldY = y * tileSize + p.y;
+
+            const spot: StartSpot = {
+                x: worldX,
+                y: worldY,
+                dx: dir.dx,
+                dy: dir.dy,
+                taken: false,
+            };
+
+            const gx = Math.round(spot.x / 15) * 15;
+            const gy = Math.round(spot.y / 15) * 15;
+
+            spot.x = gx;
+            spot.y = gy;
+
+            const isAllowed = allowed.has(`${gx},${gy}`);
+            console.log("[TRACE] Start spot test", {
+                gx, gy,
+                isAllowed,
+                tileRotation: rotation,
+                tileGridPosition: { x, y },
+                local: p,
+            });
+
+            if (!allowed.has(`${gx},${gy}`)) {
+                console.warn("[ASSERT] Misaligned start position:", spot);
+                continue;
+            }
+
+            result.push(spot);
+        }
+    }
+    console.log("[DEBUG] Final result of getStartGrid:", result);
+    console.log("[DEBUG] getStartGrid returned:", result);
+    return result;
+}
+
