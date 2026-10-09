@@ -60,7 +60,7 @@ export const GamePlay: React.FC<GamePlayProps> = ({ size }) => {
     const [trackRecord, setTrackRecord] = useState<{ trigram: string; turns: number } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [raceStarted, setRaceStarted] = useState(false);
-    const [raceLevel, setRaceLevel] = useState<RaceLevel>("novice");
+    const [raceLevel, setRaceLevel] = useState<RaceLevel>("pro");
     const [raceDirection, setRaceDirection] = useState<RaceDirection>(1);
     const [startOrder, setStartOrder] = useState<number[]>([0, 1, 2, 3]);
     const [playerCount, setPlayerCount] = useState(2);
@@ -1544,7 +1544,7 @@ export const GamePlay: React.FC<GamePlayProps> = ({ size }) => {
                             setRaceStarted(false);
                             setPlayerCount(2);
                             setPlayerControllers(["RL", "AI", "AI", "AI"]);
-                            setRaceLevel("novice");
+                            setRaceLevel("pro");
                             setRaceDirection(1);
                             setStartOrder([0, 1, 2, 3]);
                             setPlayers([]);             // ✅ Clear player dots
