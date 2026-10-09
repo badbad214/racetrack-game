@@ -8,6 +8,7 @@ import { getValidMovesForPlayer } from "../logic/getValidMovesForPlayer";
 import type { Move } from "../logic/getValidMovesForPlayer";
 import { GRID, TILE, isPointOnTrack } from "../logic/trackMaskGeometry";
 import { AI_TUNING, filterPostCrashRestartMoves as filterRestartMoves, scorePostCrashRestartMove } from "../logic/aiShared";
+import { isSupabaseConfigured, listCloudTracks, loadCloudTrackById, type CloudTrackSummary } from "../services/supabaseTracks";
 
 // Track section types
 type SectionType = "start" | "straight" | "curve90";
@@ -77,6 +78,10 @@ export const GamePlay: React.FC<GamePlayProps> = ({ size }) => {
     const [eventMessage, setEventMessage] = useState<string | null>(null);
     const aiSearchIterationsRef = useRef(0);
     const lapProgressRef = useRef<number[]>([]);
+    const [cloudTracks, setCloudTracks] = useState<CloudTrackSummary[]>([]);
+    const [selectedCloudTrackId, setSelectedCloudTrackId] = useState<string>("");
+    const [isCloudLoading, setIsCloudLoading] = useState(false);
+    const supabaseReady = isSupabaseConfigured();
 
 
     // When all players are placed, switch from placement → race
@@ -890,9 +895,9 @@ export const GamePlay: React.FC<GamePlayProps> = ({ size }) => {
         t === "start" || t === "straight" || t === "curve90";
 
     const imageMap: Record<AnySectionType, string> = {
-        start: "/tiles/start.png",
-        straight: "/tiles/straight.png",
-        curve90: "/tiles/curve.png",
+        start: "/tiles/Start.png",
+        straight: "/tiles/Straight.png",
+        curve90: "/tiles/Curve.png",
         grass: "/tiles/Grass.png",
         Tree_1: "/tiles/Tree_1.png",
         Tree_2: "/tiles/Tree_2.png",
@@ -928,6 +933,11 @@ export const GamePlay: React.FC<GamePlayProps> = ({ size }) => {
     function applyStartOrder<T>(items: T[], order: number[]): T[] {
         return order.map((sourceIndex) => items[sourceIndex]);
     }
+
+    useEffect(() => {
+        refreshCloudTracks();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [boardSize, supabaseReady]);
 
     useEffect(() => {
         if (
@@ -980,6 +990,82 @@ export const GamePlay: React.FC<GamePlayProps> = ({ size }) => {
         }
     }
 
+    async function refreshCloudTracks(sizeOverride?: number): Promise<void> {
+        if (!supabaseReady) {
+            setCloudTracks([]);
+            setSelectedCloudTrackId("");
+            return;
+        }
+
+        try {
+            const items = await listCloudTracks(sizeOverride ?? boardSize);
+            setCloudTracks(items);
+            setSelectedCloudTrackId((current) => {
+                if (!current) return items[0]?.id ?? "";
+                return items.some((track) => track.id === current) ? current : (items[0]?.id ?? "");
+            });
+        } catch (err: any) {
+            setError(err?.message ?? "Could not fetch cloud tracks.");
+        }
+    }
+
+    function applyLoadedSections(loadedSections: Section[], name: string): void {
+        setSections(loadedSections);
+        setLoadedTrackName(name);
+        loadTrackRecord(name);
+        setPlayers([]);
+        setStartGrid([]);
+        setRaceDirection(1);
+        setRaceStarted(false);
+        setPhase("placement");
+        setRaceOver(false);
+        lapProgressRef.current = [];
+        setError(null);
+    }
+
+    async function handleLoadCloudTrack(): Promise<void> {
+        if (!selectedCloudTrackId) {
+            alert("Select a cloud track first.");
+            return;
+        }
+
+        try {
+            setIsCloudLoading(true);
+            const record = await loadCloudTrackById(selectedCloudTrackId);
+            const parsed = record.sections;
+            if (!Array.isArray(parsed)) throw new Error("Cloud track format invalid");
+
+            const validTypes: AnySectionType[] = [
+                "start", "straight", "curve90",
+                "grass",
+                "Tree_1", "Tree_2", "Tree_3", "Tree_4", "Tree_5",
+                "Tree_6", "Tree_7", "Tree_8", "Tree_9", "Tree_10"
+            ];
+
+            const filtered = parsed.filter((s: any) =>
+                typeof s?.type === "string" &&
+                validTypes.includes(s.type as AnySectionType) &&
+                Number.isFinite(s.x) &&
+                Number.isFinite(s.y) &&
+                Number.isFinite(s.rotation)
+            ) as Section[];
+
+            if (!fitsBoardSize(filtered, boardSize)) {
+                throw new Error(`This cloud track does not fit the selected ${boardSize} x ${boardSize} board.`);
+            }
+
+            applyLoadedSections(filtered, `${record.name}.cloud`);
+        } catch (err: any) {
+            setSections([]);
+            setLoadedTrackName("");
+            setTrackRecord(null);
+            setError(err?.message ?? "Cloud load failed.");
+            lapProgressRef.current = [];
+        } finally {
+            setIsCloudLoading(false);
+        }
+    }
+
     function resetLoadedRace(): void {
         setSections([]);
         setLoadedTrackName("");
@@ -995,6 +1081,7 @@ export const GamePlay: React.FC<GamePlayProps> = ({ size }) => {
         setEventMessage(null);
         lapProgressRef.current = [];
         setError(null);
+        setSelectedCloudTrackId("");
     }
 
     function getTrackRecordKey(name = loadedTrackName): string {
@@ -1088,17 +1175,7 @@ export const GamePlay: React.FC<GamePlayProps> = ({ size }) => {
                     throw new Error(`This track does not fit the selected ${boardSize} x ${boardSize} board.`);
                 }
 
-                setSections(filtered as Section[]);
-                setLoadedTrackName(file.name);
-                loadTrackRecord(file.name);
-                setPlayers([]);
-                setStartGrid([]);
-                setRaceDirection(1);
-                setRaceStarted(false);
-                setPhase("placement");
-                setRaceOver(false);
-                lapProgressRef.current = [];
-                setError(null);
+                applyLoadedSections(filtered as Section[], file.name);
             } catch (err: any) {
                 setSections([]);
                 setLoadedTrackName("");
@@ -1376,6 +1453,42 @@ export const GamePlay: React.FC<GamePlayProps> = ({ size }) => {
                     >
                         📂 Load Track
                     </button>
+
+                    {supabaseReady && (
+                        <>
+                            <select
+                                value={selectedCloudTrackId}
+                                onChange={(event) => setSelectedCloudTrackId(event.target.value)}
+                                style={{ padding: "8px", minWidth: 220 }}
+                            >
+                                {cloudTracks.length === 0 ? (
+                                    <option value="">No cloud tracks</option>
+                                ) : (
+                                    cloudTracks.map((track) => (
+                                        <option key={track.id} value={track.id}>
+                                            {track.name}
+                                        </option>
+                                    ))
+                                )}
+                            </select>
+
+                            <button
+                                onClick={() => handleLoadCloudTrack()}
+                                disabled={isCloudLoading || !selectedCloudTrackId}
+                                style={{
+                                    padding: "8px 16px",
+                                    backgroundColor: isCloudLoading ? "#777" : "#0b7a5a",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    cursor: isCloudLoading || !selectedCloudTrackId ? "not-allowed" : "pointer",
+                                    fontWeight: "bold"
+                                }}
+                            >
+                                {isCloudLoading ? "⏳ Loading..." : "☁️ Load Cloud"}
+                            </button>
+                        </>
+                    )}
 
                     <button
                         onClick={resetLoadedRace}

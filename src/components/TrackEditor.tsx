@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useEffect } from "react"; // already in use, just ensure it's present
 import './TrackEditor.css';
 import { GlobalGridOverlay } from "./GlobalGridOverlay";
+import { isSupabaseConfigured, publishCloudTrack } from "../services/supabaseTracks";
 
 interface TrackEditorProps {
   size: number;
@@ -27,6 +28,7 @@ export const TrackEditor: React.FC<TrackEditorProps> = ({ size, resetSignal }) =
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [hasValidated, setHasValidated] = useState(false); //prevent the creation of the grid before validation
   const [isTrackValid, setIsTrackValid] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   //
   useEffect(() => {
     // Clear the grid when resetSignal changes
@@ -45,9 +47,9 @@ export const TrackEditor: React.FC<TrackEditorProps> = ({ size, resetSignal }) =
   }, [sections, selectedTool]);
 
   const imageMap: Record<string, string> = {
-    start: "/tiles/start.png",
-    straight: "/tiles/straight.png",
-    curve90: "/tiles/curve.png",
+    start: "/tiles/Start.png",
+    straight: "/tiles/Straight.png",
+    curve90: "/tiles/Curve.png",
     grass: "/tiles/Grass.png",
     ...Object.fromEntries(
       Array.from({ length: 10 }, (_, i) => [`Tree_${i + 1}`, `/tiles/Tree_${i + 1}.png`])
@@ -77,9 +79,9 @@ export const TrackEditor: React.FC<TrackEditorProps> = ({ size, resetSignal }) =
   const boardHeight = rows * gridUnit;
   const [debugLog, setDebugLog] = useState<string[]>([]); //console to debug the rotation of the tiles
   const tools: { type: SectionType; label: string; image: string }[] = [
-    { type: "start", label: "Start/Finish", image: "/tiles/start.png" },
-    { type: "straight", label: "Straight", image: "/tiles/straight.png" },
-    { type: "curve90", label: "90° Turn", image: "/tiles/curve.png" },
+    { type: "start", label: "Start/Finish", image: "/tiles/Start.png" },
+    { type: "straight", label: "Straight", image: "/tiles/Straight.png" },
+    { type: "curve90", label: "90° Turn", image: "/tiles/Curve.png" },
     //{ type: "curve45", label: "45° Turn", icon: "⤾" },
   ];
 
@@ -206,6 +208,39 @@ export const TrackEditor: React.FC<TrackEditorProps> = ({ size, resetSignal }) =
     link.click();
 
     URL.revokeObjectURL(url);
+  }
+
+  async function publishTrack(): Promise<void> {
+    if (!isTrackValid) {
+      alert("❌ Cannot publish. Track is invalid. Please validate it first.");
+      return;
+    }
+
+    if (!isSupabaseConfigured()) {
+      alert("Supabase is not configured. Add REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY.");
+      return;
+    }
+
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const yy = String(now.getFullYear()).slice(-2);
+    const name = `${size}_${size}_${getTrackLength()}_TRACK_${dd}${mm}${yy}_${now.getTime()}`;
+
+    try {
+      setIsPublishing(true);
+      const record = await publishCloudTrack({
+        name,
+        boardSize: size,
+        sections,
+        isPublic: true,
+      });
+      alert(`☁️ Track published: ${record.name}`);
+    } catch (error: any) {
+      alert(`❌ Publish failed: ${error?.message ?? "Unknown error"}`);
+    } finally {
+      setIsPublishing(false);
+    }
   }
 
 
@@ -662,6 +697,22 @@ export const TrackEditor: React.FC<TrackEditorProps> = ({ size, resetSignal }) =
           }}
         >
           💾 Save Track
+        </button>
+
+        <button
+          onClick={() => publishTrack()}
+          disabled={isPublishing}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: isPublishing ? "#777" : "#0b7a5a",
+            color: "#fff",
+            border: "none",
+            borderRadius: "4px",
+            cursor: isPublishing ? "not-allowed" : "pointer",
+            fontWeight: "bold"
+          }}
+        >
+          {isPublishing ? "⏳ Publishing..." : "☁️ Publish Track"}
         </button>
       </div>
 

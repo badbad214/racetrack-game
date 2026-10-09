@@ -44,3 +44,29 @@ You don’t have to ever use `eject`. The curated feature set is suitable for sm
 You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
 
 To learn React, check out the [React documentation](https://reactjs.org/).
+
+## Supabase Track Storage Setup
+
+This project supports cloud track publish/load in addition to local JSON files.
+
+### 1. Create Supabase project
+
+- Create a project at [https://supabase.com](https://supabase.com).
+- Open SQL Editor and run `supabase.sql` from the repo root.
+
+### 2. Configure environment variables
+
+- Copy `.env.example` to `.env` for local development.
+- Fill these values:
+	- `REACT_APP_SUPABASE_URL`
+	- `REACT_APP_SUPABASE_ANON_KEY`
+
+### 3. Configure Vercel environment variables
+
+- In Vercel project settings, add the same two variables.
+- Redeploy after saving variables.
+
+### 4. Use cloud storage in app
+
+- In Design Track mode, use `Publish Track` to send a validated track to Supabase.
+- In Race mode, use `Load Cloud` to load a cloud track for the selected board size.

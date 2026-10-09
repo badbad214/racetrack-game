@@ -58,9 +58,9 @@ export const TrackEditor: React.FC<TrackEditorProps> = ({ size, resetSignal }) =
   const rows = Math.floor(size / gridUnit);
   const [debugLog, setDebugLog] = useState<string[]>([]); //console to debug the rotation of the tiles
   const tools: { type: SectionType; label: string; image: string }[] = [
-    { type: "start", label: "Start/Finish", image: "/tiles/start.png" },
-    { type: "straight", label: "Straight", image: "/tiles/straight.png" },
-    { type: "curve90", label: "90° Turn", image: "/tiles/curve.png" },
+    { type: "start", label: "Start/Finish", image: "/tiles/Start.png" },
+    { type: "straight", label: "Straight", image: "/tiles/Straight.png" },
+    { type: "curve90", label: "90° Turn", image: "/tiles/Curve.png" },
     //{ type: "curve45", label: "45° Turn", icon: "⤾" },
   ];
 
